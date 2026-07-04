@@ -1,0 +1,359 @@
+{
+  "name": "webchat",
+  "displayName": "LeechCode",
+  "description": "Leech onto your logged-in web AI chat (ChatGPT, Claude, Gemini, Qwen…) and run a full agentic coding loop in your editor — no API keys, no metered tokens.",
+  "version": "0.0.17",
+  "publisher": "local-dev",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fariqueparammel/LeechCode.git"
+  },
+  "homepage": "https://github.com/fariqueparammel/LeechCode#readme",
+  "bugs": {
+    "url": "https://github.com/fariqueparammel/LeechCode/issues"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "chatgpt",
+    "claude",
+    "gemini",
+    "qwen",
+    "webchat",
+    "ai"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "capabilities": {
+    "virtualWorkspaces": true,
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
+  "extensionKind": [
+    "ui",
+    "workspace"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "webchat",
+          "title": "LeechCode",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "webchat": [
+        {
+          "type": "webview",
+          "id": "webchat.chatView",
+          "name": "Chat"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "webchat.focusChat",
+        "title": "Open Chat Panel",
+        "category": "LeechCode"
+      },
+      {
+        "command": "webchat.openSettings",
+        "title": "Open Settings",
+        "category": "LeechCode"
+      },
+      {
+        "command": "webchat.startBridge",
+        "title": "Start Browser Bridge",
+        "category": "LeechCode"
+      },
+      {
+        "command": "webchat.showBridgeStatus",
+        "title": "Show Browser Bridge Status",
+        "category": "LeechCode"
+      },
+      {
+        "command": "webchat.openProvider",
+        "title": "Open Web Chat",
+        "category": "LeechCode"
+      },
+      {
+        "command": "webchat.sendPromptToBrowser",
+        "title": "Send Prompt to Browser",
+        "category": "LeechCode"
+      },
+      {
+        "command": "webchat.runAgentTask",
+        "title": "Run Agent Task",
+        "category": "LeechCode"
+      },
+      {
+        "command": "webchat.copyPrompt",
+        "title": "Copy Prompt for Web Chat",
+        "category": "LeechCode"
+      },
+      {
+        "command": "webchat.copyContext",
+        "title": "Copy Current File Context",
+        "category": "LeechCode"
+      },
+      {
+        "command": "webchat.showSessionStatus",
+        "title": "Show Session Status",
+        "category": "LeechCode"
+      },
+      {
+        "command": "webchat.configureSessionBudget",
+        "title": "Configure Session Budget",
+        "category": "LeechCode"
+      },
+      {
+        "command": "webchat.resetSession",
+        "title": "Reset Session",
+        "category": "LeechCode"
+      },
+      {
+        "command": "webchat.compactSessionNow",
+        "title": "Compact Session Now",
+        "category": "LeechCode"
+      },
+      {
+        "command": "webchat.rotateSessionNow",
+        "title": "Start Fresh Chat From Summary",
+        "category": "LeechCode"
+      }
+    ],
+    "configuration": {
+      "title": "LeechCode",
+      "properties": {
+        "webchat.defaultProvider": {
+          "type": "string",
+          "default": "chatgpt",
+          "enum": [
+            "chatgpt",
+            "claude",
+            "gemini",
+            "qwen",
+            "deepseek",
+            "aistudio",
+            "mock"
+          ],
+          "description": "Default web AI chat provider."
+        },
+        "webchat.agent.mode": {
+          "type": "string",
+          "default": "ask",
+          "enum": [
+            "ask",
+            "auto",
+            "plan",
+            "bypass"
+          ],
+          "enumDescriptions": [
+            "Ask: review a diff before applying edits, and approve any tool/command runs.",
+            "Auto-edit: apply file changes automatically, but still approve tool/command runs.",
+            "Plan: return a step-by-step plan only — no edits, no commands.",
+            "Bypass: full access — apply edits AND run tools/commands automatically, no prompts."
+          ],
+          "description": "Agent mode. Controls whether LeechCode asks before applying edits and running tools."
+        },
+        "webchat.prompt.includeSelectionOnly": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use only the current editor selection when building context."
+        },
+        "webchat.context.maxIndexChars": {
+          "type": "number",
+          "default": 48000,
+          "minimum": 8000,
+          "description": "Paste-safe character budget for @codebase / /index whole-workspace indexing. The file tree is always included; file contents fill up to this many characters. Larger values risk freezing the web chat input on paste."
+        },
+        "webchat.context.maxTreeChars": {
+          "type": "number",
+          "default": 8000,
+          "minimum": 500,
+          "description": "Character budget for the compact PROJECT_STRUCTURE.txt file tree included with every prompt so the model always knows the repository layout (and can read_file what it needs)."
+        },
+        "webchat.provider.maxMessageChars": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "type": "number"
+          },
+          "markdownDescription": "Per-provider max characters for a single chat message, e.g. `{ \"chatgpt\": 12000, \"qwen\": 8000 }`. WebChat caps the built prompt's context to fit this so messages aren't rejected as \"too long\". Editable per provider from the in-panel Settings."
+        },
+        "webchat.provider.maxSessionChars": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "type": "number"
+          },
+          "markdownDescription": "Per-provider total character budget for one chat conversation, e.g. `{ \"chatgpt\": 240000, \"claude\": 600000 }`. Caps how much of a whole-codebase index WebChat delivers so it doesn't overflow the session window. Editable per provider from the in-panel Settings."
+        },
+        "webchat.index.chunked": {
+          "type": "boolean",
+          "default": true,
+          "description": "When @codebase / /index is too large for one message, deliver it as several ordered messages (the chat acknowledges each) instead of truncating it to a single paste-safe message."
+        },
+        "webchat.index.maxChunks": {
+          "type": "number",
+          "default": 80,
+          "minimum": 1,
+          "maximum": 500,
+          "description": "Safety cap on the number of messages used to deliver a chunked codebase index. Files beyond this many messages are skipped."
+        },
+        "webchat.bridge.port": {
+          "type": "number",
+          "default": 53451,
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "Localhost port used by the IDE-to-browser bridge."
+        },
+        "webchat.bridge.token": {
+          "type": "string",
+          "default": "webchat-dev-token",
+          "description": "Shared local bridge token. Keep the browser extension token in sync."
+        },
+        "webchat.browser.autoSubmit": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically submit prompts after inserting them into the web chat input."
+        },
+        "webchat.agent.autoApplyFileChanges": {
+          "type": "boolean",
+          "default": true,
+          "description": "Legacy fallback for applying validated WebChat agent file changes. Prefer webchat.agent.applyMode."
+        },
+        "webchat.agent.applyMode": {
+          "type": "string",
+          "default": "ask",
+          "enum": [
+            "ask",
+            "auto",
+            "never"
+          ],
+          "description": "Controls whether WebChat asks, automatically applies, or never applies agent file changes."
+        },
+        "webchat.diff.showOnApply": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open a before→after diff for each file WebChat applies, so you can see exactly what changed."
+        },
+        "webchat.vision.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Process attached/pasted images with your OWN local vision model instead of relying on the web chat's (limited) image support. The image's description/OCR is injected into the prompt as text."
+        },
+        "webchat.vision.endpoint": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "OpenAI-compatible chat-completions URL for local image analysis, e.g. Ollama `http://localhost:11434/v1/chat/completions` or LM Studio `http://localhost:1234/v1/chat/completions`."
+        },
+        "webchat.vision.model": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Vision model name at the endpoint, e.g. `llava`, `llama3.2-vision`, `qwen2.5vl`, `minicpm-v`."
+        },
+        "webchat.vision.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Optional bearer token for the vision endpoint (usually blank for local servers)."
+        },
+        "webchat.vision.prompt": {
+          "type": "string",
+          "default": "Describe this image in detail and transcribe any visible text (OCR) exactly. Focus on anything relevant to a software/coding task (UI, code, errors, diagrams).",
+          "description": "Instruction sent to your local vision model for each image."
+        },
+        "webchat.agent.autoRepairInvalidResponses": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ask the web chat for one corrected tool response when the returned agent JSON is malformed."
+        },
+        "webchat.agent.maxRepairAttempts": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 3,
+          "description": "Maximum automatic repair prompts to send for one malformed agent response."
+        },
+        "webchat.session.maxContextTokens": {
+          "type": "number",
+          "default": 150000,
+          "minimum": 1000,
+          "description": "Approximate total context-token budget for one web chat session before a fresh chat should be started."
+        },
+        "webchat.session.maxInputTokens": {
+          "type": "number",
+          "default": 120000,
+          "minimum": 1000,
+          "description": "Approximate input-token budget for one web chat session."
+        },
+        "webchat.session.maxOutputTokens": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 1000,
+          "description": "Approximate output-token budget for one web chat session."
+        },
+        "webchat.session.compactEveryPrompts": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "description": "Ask the assistant for a compact development state after this many prompts."
+        },
+        "webchat.session.rotateWhenBudgetRemainingBelow": {
+          "type": "number",
+          "default": 0.15,
+          "minimum": 0.01,
+          "maximum": 0.9,
+          "description": "Start a fresh web chat when remaining session budget falls below this ratio."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "clean": "node ./scripts/clean.mjs",
+    "compile": "tsc -p ./ && pnpm run build:webview",
+    "build:webview": "node ./scripts/build-webview.mjs",
+    "watch": "tsc -watch -p ./",
+    "watch:webview": "WATCH=1 node ./scripts/build-webview.mjs",
+    "test": "node --test ./dist/test/*.test.js",
+    "pretest": "tsc -p ./",
+    "package": "pnpm run compile && vsce package --no-dependencies --allow-missing-repository",
+    "dev": "./scripts/run-dev.sh",
+    "dev:current": "./scripts/run-dev-current.sh",
+    "dev:ide": "./scripts/run-antigravity.sh",
+    "dev:ide:current": "./scripts/run-antigravity-current.sh",
+    "dev:browser": "./scripts/run-brave.sh",
+    "run:antigravity": "./scripts/run-antigravity.sh",
+    "run:antigravity:current": "./scripts/run-antigravity-current.sh",
+    "run:cursor": "./scripts/run-cursor.sh",
+    "run:chrome": "./scripts/run-chrome.sh",
+    "run:brave": "./scripts/run-brave.sh",
+    "run:mock-chat": "node ./scripts/run-mock-webchat.mjs",
+    "verify:chunked-index": "node ./scripts/verify-chunked-index.mjs",
+    "verify:live-bridge": "node ./scripts/verify-live-bridge.mjs",
+    "verify:tooling": "node ./scripts/verify-tooling.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/vscode": "1.80.0",
+    "@vscode/vsce": "^3.6.0",
+    "esbuild": "^0.24.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.8.0"
+  }
+}

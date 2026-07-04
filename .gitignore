@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+
+# Build and test output
+dist/
+out/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+
+# VS Code extension packaging
+*.vsix
+*.vsixmanifest
+
+# Generated demo output (produced by agent runs / verification harnesses)
+demo/generated-web-app/
+demo/chatgpt-generated-web-app/
+demo/portfolio/
+
+# Local runtime state
+.webchat/
+profiles/
+*.log
+logs/
+tmp/
+temp/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+*.swo
+*~
+
+# Editor config: keep shared launch/tasks, ignore personal settings
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# Package manager cache noise
+.pnpm-store/
+.npm/
+.yarn/
+!.yarn/patches/
+!.yarn/plugins/
+!.yarn/releases/
+!.yarn/sdks/
+!.yarn/versions/
+
+# Misc cache
+.cache/
+.eslintcache

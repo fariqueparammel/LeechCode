@@ -1,0 +1,16 @@
+.vscode/**
+browser-extension/**/*.md
+docs/**
+demo/**
+node_modules/**
+src/**
+webview-ui/**
+dist/test/**
+scripts/**
+.git/**
+.gitignore
+*.vsix
+pnpm-lock.yaml
+pnpm-workspace.yaml
+tsconfig.json
+.DS_Store
