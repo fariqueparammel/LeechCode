@@ -40,6 +40,8 @@ export function buildAgentToolInstructions(input: {
   readonly previousSummary?: string;
   /** When false (inside a subagent), the spawn_subagent tool is not advertised (depth cap). */
   readonly allowSubagents?: boolean;
+  /** Provider the prompt is sent to — adds provider-specific format guidance (e.g. Gemini). */
+  readonly providerId?: string;
 }): string {
   const previousSummary = input.previousSummary
     ? `\nPrevious compacted session state:\n${input.previousSummary}\n`
@@ -74,13 +76,20 @@ export function buildAgentToolInstructions(input: {
           .filter(Boolean)
           .join("\n");
 
+  const providerNote =
+    input.providerId === "gemini" || input.providerId === "aistudio"
+      ? "PLATFORM NOTE (Gemini): reply in plain text/markdown only — no canvas, no tool_code, no code-execution blocks. Put the response block at the END of your reply, after your short explanation."
+      : "";
+
   return [
     "You are driving an IDE through WebChat's coding tools.",
     modeInstruction,
+    providerNote,
     // Streaming UX: the IDE hides the JSON block and streams the prose around it to the user live.
     "IMPORTANT: Begin your reply with 1–4 short sentences in plain language explaining what you are about to do and why. This prose streams live to the developer, so never start with the JSON block and never leave the prose empty. After the explanation, output the single marked block below.",
     toolsDoc,
-    "Return edits and tool requests only through the exact JSON block shown below. Do not use markdown fences around it.",
+    "Return edits and tool requests only through the exact JSON block shown below. Prefer the plain <webchat_agent_response> markers with no markdown fences; if your platform forces code formatting, a ```json fenced block containing the same JSON object is also accepted. Never HTML-escape the markers and never put them inside backticks.",
+    "Request tools ONLY via the \"tools\" array in that JSON. Do NOT emit tool_code / python / function-call code blocks — the IDE does not execute those.",
     "Use workspace-relative paths only. Never use absolute paths or parent-directory traversal.",
     "A PROJECT_STRUCTURE.txt listing the repository's files is included so you know the layout. Before editing an EXISTING file, first read_file it and modify its ACTUAL current content — never rewrite a file you have not read, or you will lose existing content. Writes replace the whole file.",
     "For each complete file you want changed, use {\"path\":\"relative/path\",\"action\":\"write\",\"contentBase64\":\"UTF-8 base64 full file contents\"}.",
@@ -233,7 +242,7 @@ export function buildAgentResponseRepairPrompt(input: {
     "Your previous WebChat agent tool response could not be parsed by the IDE.",
     `Parser error: ${input.parseError}`,
     "",
-    "Return only a corrected WebChat agent response block. Do not add markdown fences.",
+    "Return only a corrected WebChat agent response block (a ```json fenced block with the same JSON is also accepted).",
     "The block must be valid JSON parseable by JSON.parse.",
     "For every write, use contentBase64 with UTF-8 base64 file contents. Do not use raw content strings for code.",
     "Use this exact shape:",

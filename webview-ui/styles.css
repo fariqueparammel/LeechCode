@@ -747,17 +747,37 @@ body {
   font-size: 9.5px;
 }
 
-/* Top bar: don't let the brand name get truncated to "Lee" — shrink the sub instead */
+/* Top bar: the brand must NEVER truncate ("Leech…"). The brand keeps its intrinsic width, the
+   actions push right and wrap to a second row when the panel is narrow, and the provider subtitle
+   is the only thing allowed to disappear. */
+.topbar {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.brand {
+  flex: 0 0 auto;
+  min-width: fit-content;
+  overflow: visible;
+}
 .brand-mark {
   flex: none;
   white-space: nowrap;
 }
 .brand-sub {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
+}
+.topbar-actions {
+  margin-left: auto;
+  flex: 0 0 auto;
 }
 .provider-select {
   max-width: 116px;
+}
+@media (max-width: 330px) {
+  .brand-sub {
+    display: none;
+  }
 }
 
 /* Settings: sticky header with an always-visible back button */
@@ -1022,4 +1042,31 @@ body {
 .session-remove:hover {
   color: var(--vscode-testing-iconFailed, #f85149);
   background: color-mix(in srgb, var(--vscode-testing-iconFailed, #f85149) 12%, transparent);
+}
+
+/* Editable per-provider model list (Settings) */
+.model-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0;
+}
+.model-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  background: var(--wc-user-bg);
+  border: 1px solid var(--wc-border);
+  border-radius: 999px;
+  padding: 2px 6px 2px 10px;
+}
+.model-add-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+.model-add-row .field-input {
+  flex: 1;
+  min-width: 0;
 }

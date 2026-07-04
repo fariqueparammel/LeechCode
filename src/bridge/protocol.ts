@@ -10,6 +10,9 @@ export type BridgeMessageType =
   | "chat.model"
   | "chat.toggle"
   | "chat.navigate"
+  | "chat.selectors"
+  | "chat.probe"
+  | "chat.probe.result"
   | "chat.stream.delta"
   | "chat.stream.done"
   | "chat.state"
@@ -71,6 +74,37 @@ export interface ChatNavigatePayload {
   readonly providerId?: string;
   /** A previously-used conversation URL to navigate the provider tab to and continue in. */
   readonly url: string;
+}
+
+/** User-editable CSS-selector overrides for one provider's page (tried before the built-ins). */
+export interface ProviderSelectorOverride {
+  readonly inputSelectors?: readonly string[];
+  readonly submitSelectors?: readonly string[];
+  readonly assistantSelectors?: readonly string[];
+}
+
+/**
+ * Full override map (keyed by provider id) pushed to the browser whenever it changes or a browser
+ * (re)connects. The browser persists it in chrome.storage.local so every page of that provider
+ * applies it on load, even before the bridge is up.
+ */
+export interface ChatSelectorsPayload {
+  readonly overrides: Readonly<Record<string, ProviderSelectorOverride>>;
+}
+
+export interface ChatProbePayload {
+  readonly providerId?: string;
+}
+
+/** Which selector (if any) matched each role on the live page — the GUI's test feedback. */
+export interface ChatProbeResultPayload {
+  readonly providerId: string;
+  readonly url?: string;
+  readonly input: string | null;
+  readonly submit: string | null;
+  readonly assistant: string | null;
+  /** Character count of the reply container's current text (sanity signal for the assistant selector). */
+  readonly assistantChars: number;
 }
 
 export interface ChatStreamDeltaPayload {

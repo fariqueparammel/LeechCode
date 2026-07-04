@@ -86,6 +86,8 @@ function reducer(state: State, action: Action): State {
       return { ...state, bridge: message.bridge };
     case "sessions":
       return { ...state, sessions: message.sessions };
+    case "providers":
+      return { ...state, providers: message.providers };
     case "context":
       return { ...state, context: message.context };
     case "settings":
@@ -275,7 +277,7 @@ export function App() {
           </select>
           <button
             className="icon-btn"
-            title="New chat / reset session"
+            title="New chat — clears this panel's conversation, token budget and stored summary, and starts a fresh session (your chat history list is kept)"
             onClick={() => post({ type: "sessionAction", action: "reset" })}
           >
             ⟳

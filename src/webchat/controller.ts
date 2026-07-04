@@ -819,9 +819,33 @@ export class WebChatController implements vscode.Disposable {
       host: provider.host,
       tags: provider.tags,
       imageSupport: provider.imageSupport,
-      models: provider.models,
+      models: this.getProviderModels(provider.id),
       features: provider.features
     }));
+  }
+
+  /**
+   * Models offered in the switcher for a provider. User overrides (webchat.provider.models) win
+   * outright when present — providers deprecate/rename models constantly, so the shipped defaults
+   * are only a starting point the user can freely add to / remove from in Settings.
+   */
+  private getProviderModels(id: string): readonly string[] {
+    const overrides = vscode.workspace
+      .getConfiguration("webchat")
+      .get<Record<string, string[]>>("provider.models", {});
+    const override = overrides ? overrides[id] : undefined;
+    if (Array.isArray(override)) {
+      return override.filter((m) => typeof m === "string" && m.trim().length > 0);
+    }
+    return getProvider(id)?.models ?? [];
+  }
+
+  async setProviderModels(providerId: string, models: readonly string[]): Promise<void> {
+    const config = vscode.workspace.getConfiguration("webchat");
+    const overrides = { ...(config.get<Record<string, string[]>>("provider.models", {}) ?? {}) };
+    const cleaned = [...new Set(models.map((m) => m.trim()).filter(Boolean))];
+    overrides[providerId] = cleaned;
+    await config.update("provider.models", overrides, vscode.ConfigurationTarget.Workspace);
   }
 
   /** Ask the browser to toggle an on-page feature (e.g. DeepSeek Search / DeepThink) for the provider. */
@@ -1746,7 +1770,8 @@ export class WebChatController implements vscode.Disposable {
       mode: this.getAgentMode(),
       previousSummary: storedSummary,
       // Depth cap: once we're inside a subagent turn, don't advertise spawn_subagent again.
-      allowSubagents: this.subagentCount === 0
+      allowSubagents: this.subagentCount === 0,
+      providerId: provider.id
     });
     const taskInstruction = userInstruction
       ? `User task:\n${userInstruction}`

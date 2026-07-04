@@ -10,7 +10,7 @@ const providers: readonly WebChatProvider[] = [
     maxSessionChars: 240000,
     tags: ["chat", "vision"],
     imageSupport: "limited",
-    models: ["Auto", "GPT-4o", "GPT-4.1", "o3", "o4-mini"],
+    models: ["Auto", "Instant", "Thinking"],
     features: [{ id: "search", label: "Search", icon: "🔍" }]
   },
   {
@@ -22,7 +22,7 @@ const providers: readonly WebChatProvider[] = [
     maxSessionChars: 600000,
     tags: ["chat", "vision"],
     imageSupport: "limited",
-    models: ["Claude Opus", "Claude Sonnet", "Claude Haiku"]
+    models: ["Opus", "Sonnet", "Haiku"]
   },
   {
     id: "gemini",
@@ -33,7 +33,7 @@ const providers: readonly WebChatProvider[] = [
     maxSessionChars: 500000,
     tags: ["chat", "vision"],
     imageSupport: "generous",
-    models: ["2.5 Flash", "2.5 Pro"]
+    models: ["3 Flash", "3 Pro"]
   },
   {
     id: "qwen",
@@ -44,7 +44,7 @@ const providers: readonly WebChatProvider[] = [
     maxSessionChars: 120000,
     tags: ["chat", "vision"],
     imageSupport: "generous",
-    models: ["Qwen3-Max", "Qwen3", "Qwen2.5-VL"]
+    models: ["Qwen3-Max", "Qwen3-Coder", "Qwen3-VL"]
   },
   {
     id: "deepseek",
@@ -55,7 +55,7 @@ const providers: readonly WebChatProvider[] = [
     maxSessionChars: 200000,
     tags: ["chat"],
     imageSupport: "none",
-    models: ["DeepSeek-V3", "DeepThink (R1)"],
+    models: ["DeepSeek", "DeepThink"],
     features: [
       { id: "search", label: "Search", icon: "🔍" },
       { id: "think", label: "DeepThink", icon: "🧠" }
@@ -70,7 +70,7 @@ const providers: readonly WebChatProvider[] = [
     maxSessionChars: 4000000,
     tags: ["chat", "vision", "images"],
     imageSupport: "unlimited",
-    models: ["Gemini 2.5 Pro", "Gemini 2.5 Flash"]
+    models: ["Gemini 3 Pro", "Gemini 3 Flash"]
   },
   {
     id: "mock",

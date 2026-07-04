@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { BridgeStatusInfo, ProviderInfo, WebChatSettings } from "../src/webview/messages";
 import { post } from "./vscodeApi";
 
@@ -48,6 +48,7 @@ export function SettingsView({ settings, providers, bridge, onBack }: SettingsVi
             }}
           />
         ) : null}
+        {current ? <ModelListEditor key={current.id} provider={current} /> : null}
         <NumberField
           label={`Max message length for ${settings.currentProviderLabel || "this provider"} (chars)`}
           hint="Per-message input limit for this chat. WebChat trims context — or splits a codebase index — to fit so messages aren't rejected as 'too long'. Set per provider — switch the default provider above to edit another."
@@ -193,6 +194,68 @@ export function SettingsView({ settings, providers, bridge, onBack }: SettingsVi
           onChange={(value) => update("bridgeToken", value)}
         />
       </Section>
+    </div>
+  );
+}
+
+/**
+ * Add/remove the models offered for a provider. Providers deprecate and rename models constantly,
+ * so the shipped defaults are only a starting point — every add/remove persists immediately to the
+ * per-provider override (webchat.provider.models) and refreshes the switchers.
+ */
+function ModelListEditor({ provider }: { provider: ProviderInfo }) {
+  const [draft, setDraft] = useState("");
+  const models = provider.models ?? [];
+
+  const commit = (next: readonly string[]) =>
+    post({ type: "setProviderModels", providerId: provider.id, models: next });
+
+  const add = () => {
+    const name = draft.trim();
+    if (!name || models.includes(name)) {
+      setDraft("");
+      return;
+    }
+    commit([...models, name]);
+    setDraft("");
+  };
+
+  return (
+    <div className="field">
+      <span className="field-label">Models listed for {provider.label} (add / remove)</span>
+      <div className="model-chip-row">
+        {models.map((model) => (
+          <span className="model-chip" key={model} title={`Shown in the model switcher for ${provider.label}`}>
+            {model}
+            <button className="attach-remove" title="Remove this model" onClick={() => commit(models.filter((m) => m !== model))}>
+              ×
+            </button>
+          </span>
+        ))}
+        {models.length === 0 ? <span className="session-empty">no models listed — add one below</span> : null}
+      </div>
+      <div className="model-add-row">
+        <input
+          type="text"
+          className="field-input"
+          placeholder="e.g. 3 Pro — as shown in the provider's own model menu"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              add();
+            }
+          }}
+        />
+        <button className="btn ghost" disabled={!draft.trim()} onClick={add}>
+          Add
+        </button>
+      </div>
+      <span className="field-hint">
+        Each entry must match (part of) a name in {provider.label}'s own model menu — the switcher clicks the first
+        menu item containing it. Providers rename models often; update this list anytime, no reload needed.
+      </span>
     </div>
   );
 }

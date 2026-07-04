@@ -145,6 +145,11 @@ export class WebChatViewProvider implements vscode.WebviewViewProvider {
       case "setModel":
         this.controller.setModel(message.model);
         return;
+      case "setProviderModels":
+        await this.controller.setProviderModels(message.providerId, message.models);
+        // Refresh the webview's provider list so the switcher + editor reflect the change at once.
+        this.post({ type: "providers", providers: this.controller.getProvidersInfo() });
+        return;
       case "toggleFeature":
         this.controller.toggleFeature(message.featureId);
         return;

@@ -2,7 +2,7 @@
   "name": "webchat",
   "displayName": "LeechCode",
   "description": "Leech onto your logged-in web AI chat (ChatGPT, Claude, Gemini, Qwen…) and run a full agentic coding loop in your editor — no API keys, no metered tokens.",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "publisher": "local-dev",
   "private": true,
   "license": "MIT",
@@ -192,6 +192,17 @@
             "type": "number"
           },
           "markdownDescription": "Per-provider max characters for a single chat message, e.g. `{ \"chatgpt\": 12000, \"qwen\": 8000 }`. WebChat caps the built prompt's context to fit this so messages aren't rejected as \"too long\". Editable per provider from the in-panel Settings."
+        },
+        "webchat.provider.models": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "markdownDescription": "Per-provider model lists for the in-panel model switcher, e.g. `{ \"gemini\": [\"3 Flash\", \"3 Pro\"] }`. When set for a provider it fully replaces the built-in defaults — providers rename/deprecate models often, so add or remove entries from the in-panel Settings. Each entry should match (part of) the name shown in the provider's own model menu."
         },
         "webchat.provider.maxSessionChars": {
           "type": "object",

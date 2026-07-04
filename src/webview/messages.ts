@@ -105,6 +105,7 @@ export type HostToWebview =
     }
   | { readonly type: "bridgeStatus"; readonly bridge: BridgeStatusInfo }
   | { readonly type: "sessions"; readonly sessions: readonly SessionInfo[] }
+  | { readonly type: "providers"; readonly providers: readonly ProviderInfo[] }
   | { readonly type: "context"; readonly context: ContextInfo }
   | { readonly type: "settings"; readonly settings: WebChatSettings }
   | { readonly type: "sessionUsage"; readonly usage: SessionUsageInfo }
@@ -163,6 +164,7 @@ export type WebviewToHost =
   | { readonly type: "skipCommands"; readonly turnId?: string }
   | { readonly type: "cancelPrompt"; readonly turnId?: string }
   | { readonly type: "setModel"; readonly model: string }
+  | { readonly type: "setProviderModels"; readonly providerId: string; readonly models: readonly string[] }
   | { readonly type: "toggleFeature"; readonly featureId: string }
   | { readonly type: "openChatUrl"; readonly url: string }
   | { readonly type: "removeSession"; readonly url: string }
