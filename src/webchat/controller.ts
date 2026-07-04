@@ -9,10 +9,14 @@ import type {
   ChatCancelPayload,
   ChatModelPayload,
   ChatNavigatePayload,
+  ChatProbePayload,
+  ChatProbeResultPayload,
   ChatPromptPayload,
+  ChatSelectorsPayload,
   ChatStreamDeltaPayload,
   ChatStreamDonePayload,
-  ChatTogglePayload
+  ChatTogglePayload,
+  ProviderSelectorOverride
 } from "../bridge/protocol";
 import { createEnvelope } from "../bridge/protocol";
 import { LocalBridgeServer } from "../bridge/localBridgeServer";
@@ -176,6 +180,8 @@ export class WebChatController implements vscode.Disposable {
   private indexTurnTimer: NodeJS.Timeout | undefined;
   /** When true, incoming stream deltas/dones are ignored (the in-flight turn was cancelled). */
   private responseSuppressed = false;
+  /** True from dispatch until the response completes — lets a browser disconnect cancel the turn. */
+  private turnInFlight = false;
   /** Set by the panel when a webview is live, so we can prefer inline cards over modal dialogs. */
   webviewConnected = false;
 
@@ -232,7 +238,21 @@ export class WebChatController implements vscode.Disposable {
         message: `Browser connected — ${status.clientCount} chat tab ready. You can send now.`
       });
     } else if (previousCount > 0 && status.clientCount === 0) {
-      this.emitters.notice.fire({ level: "warn", message: "Browser disconnected." });
+      // The browser is gone: any in-flight request can never complete — cancel it immediately so
+      // the panel doesn't sit on "thinking…" forever (and no late scraps get parsed).
+      if (this.turnInFlight || this.indexingActive) {
+        this.turnInFlight = false;
+        this.responseSuppressed = true;
+        this.indexAborted = true;
+        this.finishIndexTurn();
+        this.emitters.cancelled.fire({ turnId: this.currentTurnId });
+        this.emitters.notice.fire({
+          level: "warn",
+          message: "Browser disconnected — cancelled the in-flight request. Reconnect and hit retry to resend."
+        });
+      } else {
+        this.emitters.notice.fire({ level: "warn", message: "Browser disconnected." });
+      }
     }
   }
 
@@ -317,6 +337,18 @@ export class WebChatController implements vscode.Disposable {
       }
     }
 
+    // Images going to the page directly: frame them as ANALYSIS input so the model inspects them
+    // (UI screenshot → concrete code improvements; error screenshot → the fix) instead of treating
+    // the request as image generation.
+    if (attachments?.some((a) => a.mimeType.startsWith("image/"))) {
+      instruction = [
+        instruction,
+        "Note on the attached image(s): they are input for ANALYSIS — do not generate or edit images. Read everything in them (UI, code, error text, diagrams). If it's a UI screenshot, critique it and propose concrete code improvements; if it shows an error, diagnose it and fix the code; always tie your response back to this project's files."
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+    }
+
     // Whole-codebase index: if it won't fit one message, deliver the files across several ordered
     // messages first (waiting for the chat to acknowledge each), then send the real task through the
     // normal path with the codebase already primed into the conversation.
@@ -373,6 +405,8 @@ export class WebChatController implements vscode.Disposable {
       })
     );
 
+    this.turnInFlight = clientCount > 0;
+
     const info: DispatchInfo = {
       turnId: this.currentTurnId,
       instruction: this.describeInstruction(instruction, action),
@@ -413,6 +447,7 @@ export class WebChatController implements vscode.Disposable {
     }
 
     this.responseSuppressed = true;
+    this.turnInFlight = false;
     // Also abort any in-flight chunked-index delivery.
     this.indexAborted = true;
     this.finishIndexTurn();
@@ -465,7 +500,28 @@ export class WebChatController implements vscode.Disposable {
     this.output.appendLine(`[${message.type}] ${JSON.stringify(message.payload)}`);
 
     if (message.type === "pair.request" || message.type === "bridge.status") {
+      if (message.type === "pair.request") {
+        // A browser just (re)connected — hand it the user's page-adapter selector overrides.
+        this.pushSelectorOverrides();
+      }
       this.pollStatus();
+      return;
+    }
+
+    // Selector-test feedback from the live page (Page Adapter GUI's "Test on live page").
+    if (message.type === "chat.probe.result") {
+      const probe = message.payload as ChatProbeResultPayload;
+      const part = (label: string, sel: string | null, extra = "") =>
+        sel ? `${label} ✓ ${sel}${extra}` : `${label} ✗ NOT FOUND`;
+      const allFound = Boolean(probe.input && probe.submit && probe.assistant);
+      this.emitters.notice.fire({
+        level: allFound ? "info" : "warn",
+        message: `Selector test (${probe.providerId}): ${part("input", probe.input)} · ${part("send", probe.submit)} · ${part(
+          "reply",
+          probe.assistant,
+          probe.assistant ? ` (${probe.assistantChars} chars)` : ""
+        )}`
+      });
       return;
     }
 
@@ -525,6 +581,7 @@ export class WebChatController implements vscode.Disposable {
   }
 
   private async handleAssistantDone(fullText: string, providerId?: string): Promise<void> {
+    this.turnInFlight = false;
     this.emitters.streamDone.fire({
       turnId: this.currentTurnId,
       displayText: stripMarkedBlock(fullText),
@@ -800,6 +857,7 @@ export class WebChatController implements vscode.Disposable {
     this.indexAborted = true;
     this.finishIndexTurn();
     this.responseSuppressed = false;
+    this.turnInFlight = false;
     this.usage = { promptCount: 0, inputTokensUsed: 0, outputTokensUsed: 0 };
     this.activeAssistantText = "";
     this.lastParsed = undefined;
@@ -846,6 +904,92 @@ export class WebChatController implements vscode.Disposable {
     const cleaned = [...new Set(models.map((m) => m.trim()).filter(Boolean))];
     overrides[providerId] = cleaned;
     await config.update("provider.models", overrides, vscode.ConfigurationTarget.Workspace);
+  }
+
+  // ---- page-adapter selector overrides (fix a provider without an extension update) ------------
+  getSelectorOverrides(): Readonly<Record<string, ProviderSelectorOverride>> {
+    return (
+      vscode.workspace
+        .getConfiguration("webchat")
+        .get<Record<string, ProviderSelectorOverride>>("provider.selectors", {}) ?? {}
+    );
+  }
+
+  /**
+   * Save the user's custom CSS selectors for one provider's page. Empty in all three fields resets
+   * that provider to the built-ins. The full map is pushed to the browser, which persists it in
+   * chrome.storage.local per site and applies it live in every open tab.
+   */
+  async setProviderSelectors(
+    providerId: string,
+    inputSelectors: readonly string[],
+    submitSelectors: readonly string[],
+    assistantSelectors: readonly string[]
+  ): Promise<void> {
+    const clean = (list: readonly string[]) => [...new Set(list.map((s) => s.trim()).filter(Boolean))];
+    const config = vscode.workspace.getConfiguration("webchat");
+    const overrides = {
+      ...(config.get<Record<string, ProviderSelectorOverride>>("provider.selectors", {}) ?? {})
+    } as Record<string, ProviderSelectorOverride>;
+    const next: ProviderSelectorOverride = {
+      inputSelectors: clean(inputSelectors),
+      submitSelectors: clean(submitSelectors),
+      assistantSelectors: clean(assistantSelectors)
+    };
+    const isEmpty =
+      next.inputSelectors!.length === 0 &&
+      next.submitSelectors!.length === 0 &&
+      next.assistantSelectors!.length === 0;
+    if (isEmpty) {
+      delete overrides[providerId];
+    } else {
+      overrides[providerId] = next;
+    }
+    await config.update("provider.selectors", overrides, vscode.ConfigurationTarget.Workspace);
+    this.pushSelectorOverrides();
+    this.emitters.settings.fire(this.getSettings());
+    this.emitters.notice.fire({
+      level: "info",
+      message: isEmpty
+        ? `Reset ${providerId} page selectors to the built-ins.`
+        : `Saved custom page selectors for ${providerId} — pushed to the browser and stored for that site.`
+    });
+  }
+
+  /** Send the full override map to the browser (persisted there in chrome.storage.local per site). */
+  private pushSelectorOverrides(): void {
+    if (!this.bridge?.getStatus().running || this.getBridgeStatus().clientCount === 0) {
+      return;
+    }
+    this.bridge.sendToBrowsers(
+      createEnvelope<ChatSelectorsPayload>({
+        id: randomUUID(),
+        sessionId: this.bridgeSessionId,
+        type: "chat.selectors",
+        payload: { overrides: this.getSelectorOverrides() }
+      })
+    );
+  }
+
+  /** Ask the live page which selector matches each role — feedback for the Page Adapter GUI. */
+  probeSelectors(): void {
+    if (!this.bridge?.getStatus().running || this.getBridgeStatus().clientCount === 0) {
+      this.emitters.notice.fire({
+        level: "warn",
+        message: "Connect a browser with the provider page open, then test again."
+      });
+      return;
+    }
+    this.pushSelectorOverrides(); // ensure the page tests exactly what was saved
+    this.bridge.sendToBrowsers(
+      createEnvelope<ChatProbePayload>({
+        id: randomUUID(),
+        sessionId: this.bridgeSessionId,
+        type: "chat.probe",
+        payload: { providerId: this.getCurrentProvider()?.id }
+      })
+    );
+    this.emitters.notice.fire({ level: "info", message: "Testing page selectors on the live tab…" });
   }
 
   /** Ask the browser to toggle an on-page feature (e.g. DeepSeek Search / DeepThink) for the provider. */
@@ -1304,7 +1448,8 @@ export class WebChatController implements vscode.Disposable {
       ),
       visionEnabled: config.get("vision.enabled", false),
       visionEndpoint: config.get("vision.endpoint", ""),
-      visionModel: config.get("vision.model", "")
+      visionModel: config.get("vision.model", ""),
+      providerSelectors: this.getSelectorOverrides()
     };
   }
 

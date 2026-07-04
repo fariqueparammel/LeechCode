@@ -2,7 +2,7 @@
   "name": "webchat",
   "displayName": "LeechCode",
   "description": "Leech onto your logged-in web AI chat (ChatGPT, Claude, Gemini, Qwen…) and run a full agentic coding loop in your editor — no API keys, no metered tokens.",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "publisher": "local-dev",
   "private": true,
   "license": "MIT",
@@ -203,6 +203,11 @@
             }
           },
           "markdownDescription": "Per-provider model lists for the in-panel model switcher, e.g. `{ \"gemini\": [\"3 Flash\", \"3 Pro\"] }`. When set for a provider it fully replaces the built-in defaults — providers rename/deprecate models often, so add or remove entries from the in-panel Settings. Each entry should match (part of) the name shown in the provider's own model menu."
+        },
+        "webchat.provider.selectors": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "Per-provider CSS-selector overrides for the chat page (Page Adapter). Shape: `{ \"chatgpt\": { \"inputSelectors\": [\"#prompt-textarea\"], \"submitSelectors\": [...], \"assistantSelectors\": [...] } }`. Custom selectors are tried before the built-ins and are pushed to the browser extension, which stores them per site in its local storage. Edit from the in-panel Settings → Page adapter (with a live Test button)."
         },
         "webchat.provider.maxSessionChars": {
           "type": "object",

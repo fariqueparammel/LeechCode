@@ -47,7 +47,8 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   if (
     message?.type === "webchat.content.state" ||
     message?.type === "webchat.content.stream" ||
-    message?.type === "webchat.content.done"
+    message?.type === "webchat.content.done" ||
+    message?.type === "webchat.content.probe"
   ) {
     void sendToBridge({
       version: 1,
@@ -142,6 +143,31 @@ async function handleBridgeMessage(envelope) {
     await forwardToActiveTab({ type: "webchat.toggle", label: envelope.payload?.label, envelope });
   } else if (envelope?.type === "chat.navigate") {
     await navigateToChat(envelope.payload?.url);
+  } else if (envelope?.type === "chat.selectors") {
+    await applySelectorOverrides(envelope.payload?.overrides || {});
+  } else if (envelope?.type === "chat.probe") {
+    await forwardToActiveTab({ type: "webchat.probe", envelope });
+  }
+}
+
+// Persist per-site selector overrides in the extension's local storage (so every page of that site
+// applies them on load, bridge or not) and push them live to all open provider tabs.
+async function applySelectorOverrides(overrides) {
+  try {
+    await chrome.storage.local.set({ webchatSelectorOverrides: overrides });
+  } catch {
+    // storage unavailable; live push below still applies until reload
+  }
+  const tabs = await chrome.tabs.query({ url: PROVIDER_URL_PATTERNS });
+  for (const tab of tabs) {
+    if (!tab.id) {
+      continue;
+    }
+    try {
+      await chrome.tabs.sendMessage(tab.id, { type: "webchat.selectors", overrides });
+    } catch {
+      // tab without our content script — it will read storage on next load
+    }
   }
 }
 

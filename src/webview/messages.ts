@@ -61,6 +61,8 @@ export interface WebChatSettings {
   readonly visionEnabled: boolean;
   readonly visionEndpoint: string;
   readonly visionModel: string;
+  /** Saved page-adapter selector overrides, keyed by provider id. */
+  readonly providerSelectors: Readonly<Record<string, SelectorOverrideInfo>>;
 }
 
 export interface ContextInfo {
@@ -70,6 +72,13 @@ export interface ContextInfo {
 }
 
 export type NoticeLevel = "info" | "warn" | "error";
+
+/** Per-site CSS-selector overrides (Page Adapter GUI) — tried before the built-ins. */
+export interface SelectorOverrideInfo {
+  readonly inputSelectors?: readonly string[];
+  readonly submitSelectors?: readonly string[];
+  readonly assistantSelectors?: readonly string[];
+}
 
 /** A web chat conversation the extension has seen / used, so the user can jump back into it. */
 export interface SessionInfo {
@@ -165,6 +174,14 @@ export type WebviewToHost =
   | { readonly type: "cancelPrompt"; readonly turnId?: string }
   | { readonly type: "setModel"; readonly model: string }
   | { readonly type: "setProviderModels"; readonly providerId: string; readonly models: readonly string[] }
+  | {
+      readonly type: "setProviderSelectors";
+      readonly providerId: string;
+      readonly inputSelectors: readonly string[];
+      readonly submitSelectors: readonly string[];
+      readonly assistantSelectors: readonly string[];
+    }
+  | { readonly type: "probeSelectors" }
   | { readonly type: "toggleFeature"; readonly featureId: string }
   | { readonly type: "openChatUrl"; readonly url: string }
   | { readonly type: "removeSession"; readonly url: string }

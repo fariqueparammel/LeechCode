@@ -1,5 +1,13 @@
 # Editing provider adapters (fix a chat site yourself)
 
+> **Easiest way — no code: the in-panel GUI.** LeechCode Settings → **Page adapter** lets you paste
+> new CSS selectors for the three universal roles (chat input box · send button · reply container),
+> **Save & apply** them live to the browser, and hit **Test on live page** to see exactly which
+> selector matched each role on the open tab. Overrides are stored per website (in the browser
+> extension's local storage, pushed automatically on every reconnect) and are tried *before* the
+> built-ins below. Everything after this note is the under-the-hood/manual route — useful for deep
+> changes like adding a brand-new provider.
+
 Web AI chat pages (ChatGPT, Claude, Gemini, Qwen, DeepSeek, AI Studio) change their HTML often.
 When that happens, LeechCode may fail to **find the input**, **click Send**, **read the response**,
 **dismiss a login pop‑up**, **click Stop**, or **switch the model**. You can fix this yourself by

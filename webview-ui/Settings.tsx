@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import type { BridgeStatusInfo, ProviderInfo, WebChatSettings } from "../src/webview/messages";
+import type { BridgeStatusInfo, ProviderInfo, SelectorOverrideInfo, WebChatSettings } from "../src/webview/messages";
 import { post } from "./vscodeApi";
 
 interface SettingsViewProps {
@@ -146,6 +146,15 @@ export function SettingsView({ settings, providers, bridge, onBack }: SettingsVi
         />
       </Section>
 
+      {current ? (
+        <Section
+          title={`Page adapter — fix ${current.label} yourself`}
+          hint={`If ${current.label} updates its website and LeechCode stops finding things, paste new CSS selectors here — no extension update needed. The same three universal fields work for every chat site. Saved per website: pushed to the browser live and stored in the extension's local storage, so every ${current.label} tab uses them. Empty = built-in selectors.`}
+        >
+          <SelectorEditor key={current.id} provider={current} saved={settings.providerSelectors[current.id]} />
+        </Section>
+      ) : null}
+
       <Section
         title="Local vision (image → text)"
         hint="Bring your own local model to read pasted/attached images, so the web chat's limited image support doesn't matter. The image's description/OCR is injected into the prompt as text."
@@ -194,6 +203,102 @@ export function SettingsView({ settings, providers, bridge, onBack }: SettingsVi
           onChange={(value) => update("bridgeToken", value)}
         />
       </Section>
+    </div>
+  );
+}
+
+/**
+ * Per-site selector editor: the three universal roles every chat page has. One CSS selector per
+ * line; customs are tried before the built-ins. "Test on live page" probes the open tab and reports
+ * which selector matched each role.
+ */
+function SelectorEditor({ provider, saved }: { provider: ProviderInfo; saved?: SelectorOverrideInfo }) {
+  const [input, setInput] = useState((saved?.inputSelectors ?? []).join("\n"));
+  const [submit, setSubmit] = useState((saved?.submitSelectors ?? []).join("\n"));
+  const [assistant, setAssistant] = useState((saved?.assistantSelectors ?? []).join("\n"));
+
+  const toList = (value: string) => value.split("\n").map((s) => s.trim()).filter(Boolean);
+  const save = () =>
+    post({
+      type: "setProviderSelectors",
+      providerId: provider.id,
+      inputSelectors: toList(input),
+      submitSelectors: toList(submit),
+      assistantSelectors: toList(assistant)
+    });
+  const reset = () => {
+    setInput("");
+    setSubmit("");
+    setAssistant("");
+    post({ type: "setProviderSelectors", providerId: provider.id, inputSelectors: [], submitSelectors: [], assistantSelectors: [] });
+  };
+
+  return (
+    <>
+      <SelectorArea
+        label="Chat input box (where the prompt is typed)"
+        placeholder={"#prompt-textarea\n[contenteditable='true'][role='textbox']"}
+        value={input}
+        onChange={setInput}
+      />
+      <SelectorArea
+        label="Send button"
+        placeholder={"[data-testid='send-button']\nbutton[aria-label*='Send']"}
+        value={submit}
+        onChange={setSubmit}
+      />
+      <SelectorArea
+        label="Reply container (the assistant's answer)"
+        placeholder={"[data-message-author-role='assistant']\n.markdown"}
+        value={assistant}
+        onChange={setAssistant}
+      />
+      <div className="selector-actions">
+        <button className="btn primary" onClick={save}>
+          Save &amp; apply
+        </button>
+        <button
+          className="btn ghost"
+          title="Probes the open provider tab with the SAVED selectors and reports which one matched each role — save first"
+          onClick={() => post({ type: "probeSelectors" })}
+        >
+          Test on live page
+        </button>
+        <button className="btn ghost" onClick={reset}>
+          Reset to built-ins
+        </button>
+      </div>
+      <span className="field-hint">
+        One CSS selector per line, most specific first — customs are tried before the built-ins, which stay as
+        fallbacks. Finding a selector: right-click the element on the chat page → Inspect → prefer data-testid /
+        aria-label / id (avoid random class names). Full guide: docs/provider-adapters.md.
+      </span>
+    </>
+  );
+}
+
+function SelectorArea({
+  label,
+  placeholder,
+  value,
+  onChange
+}: {
+  label: string;
+  placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="field">
+      <span className="field-label">{label}</span>
+      <textarea
+        className="field-input selector-textarea"
+        rows={2}
+        spellCheck={false}
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
     </div>
   );
 }

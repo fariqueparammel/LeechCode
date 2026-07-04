@@ -201,6 +201,41 @@ const STOP_SELECTORS = [
 ];
 
 const provider = providers.find((candidate) => candidate.hosts.includes(location.hostname));
+
+// User-configured selector overrides, keyed by provider id. Persisted in chrome.storage.local (by
+// background.js) so every page of that site applies them on load — no extension update needed when
+// a provider redesigns its page. Custom selectors are tried FIRST; built-ins stay as fallbacks.
+const SELECTOR_STORE_KEY = "webchatSelectorOverrides";
+let selectorOverrides = {};
+try {
+  chrome.storage.local.get(SELECTOR_STORE_KEY, (data) => {
+    if (data && data[SELECTOR_STORE_KEY]) {
+      selectorOverrides = data[SELECTOR_STORE_KEY];
+    }
+  });
+} catch {
+  // storage unavailable — built-ins only
+}
+
+function effectiveSelectors(kind, fallbacks) {
+  const custom = (selectorOverrides[provider.id] && selectorOverrides[provider.id][kind]) || [];
+  return uniqueSelectors([...custom, ...(provider[kind] || []), ...fallbacks]);
+}
+
+// Provider error banners ("Something went wrong…") get scraped as if they were the reply. Detect
+// and report them as a blocked state instead of streaming them to the IDE as an assistant answer.
+const PROVIDER_ERROR_PATTERNS = [
+  /^\s*something went wrong/i,
+  /^\s*an error occurred/i,
+  /^\s*oops[!,. ]/i,
+  /^\s*network error/i,
+  /^\s*message failed to send/i
+];
+
+function isProviderErrorText(text) {
+  return text.length < 400 && PROVIDER_ERROR_PATTERNS.some((pattern) => pattern.test(text));
+}
+
 let latestAssistantText = "";
 let lastDoneText = "";
 let doneTimer;
@@ -273,6 +308,11 @@ if (provider) {
       void switchModel(message.model);
     } else if (message?.type === "webchat.toggle") {
       toggleFeature(message.label);
+    } else if (message?.type === "webchat.selectors") {
+      selectorOverrides = message.overrides || {};
+      sendState("ready", "Page-adapter selectors updated from the IDE.");
+    } else if (message?.type === "webchat.probe") {
+      runProbe();
     }
   });
 
@@ -349,6 +389,16 @@ function handleAssistantMutation() {
     return;
   }
 
+  if (isProviderErrorText(fullText)) {
+    // An error banner, not a reply — surface it as blocked so the IDE can retry, and re-baseline so
+    // it is never streamed as assistant text.
+    latestAssistantText = fullText;
+    lastDoneText = fullText;
+    clearTimeout(doneTimer);
+    sendState("blocked", `Provider error banner: ${fullText.slice(0, 140)}`);
+    return;
+  }
+
   const delta = fullText.startsWith(latestAssistantText)
     ? fullText.slice(latestAssistantText.length)
     : fullText;
@@ -396,10 +446,7 @@ function scheduleDone(fullText) {
 }
 
 function findPromptInput() {
-  const selectors = uniqueSelectors([
-    ...(provider.inputSelectors || []),
-    ...FALLBACK_INPUT_SELECTORS
-  ]);
+  const selectors = effectiveSelectors("inputSelectors", FALLBACK_INPUT_SELECTORS);
 
   for (const selector of selectors) {
     const nodes = [...document.querySelectorAll(selector)];
@@ -417,6 +464,8 @@ async function setInputText(target, text) {
   target.focus();
 
   if (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) {
+    // Native value setter REPLACES the whole value, so leftovers from a failed/retried prompt are
+    // cleared automatically.
     const setter = Object.getOwnPropertyDescriptor(target.constructor.prototype, "value")?.set;
     setter?.call(target, text);
     target.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
@@ -425,21 +474,35 @@ async function setInputText(target, text) {
     return;
   }
 
-  const selection = window.getSelection();
-  const range = document.createRange();
-  range.selectNodeContents(target);
-  range.deleteContents();
-  selection?.removeAllRanges();
-  selection?.addRange(range);
+  // contenteditable (ProseMirror/Quill): select-all THROUGH the editor's own command pipeline, then
+  // insert — this replaces any previous prompt still sitting in the box (e.g. after a provider
+  // error + retry) instead of appending to it. Raw Range surgery desyncs ProseMirror's state, which
+  // is how stale text used to survive.
+  const selectedAll = document.execCommand?.("selectAll", false);
+  if (!selectedAll) {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(target);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  }
 
   const inserted = document.execCommand?.("insertText", false, text);
 
   if (!inserted) {
-    target.textContent = text;
+    target.textContent = text; // last resort: hard replace
   }
 
   target.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
   await sleep(250);
+
+  // Belt-and-braces: if the editor somehow kept old content prepended/appended, hard-replace it.
+  const current = (target.textContent || "").trim();
+  if (current !== text.trim() && current.includes(text.trim()) === false) {
+    target.textContent = text;
+    target.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
+    await sleep(150);
+  }
 }
 
 async function submitPrompt(target) {
@@ -499,10 +562,7 @@ async function waitForGenerationIdle(timeoutMs = 90000) {
 }
 
 function findSubmitButton() {
-  const selectors = uniqueSelectors([
-    ...(provider.submitSelectors || []),
-    ...FALLBACK_SUBMIT_SELECTORS
-  ]);
+  const selectors = effectiveSelectors("submitSelectors", FALLBACK_SUBMIT_SELECTORS);
 
   for (const selector of selectors) {
     const buttons = [...document.querySelectorAll(selector)];
@@ -531,6 +591,55 @@ function findSubmitButton() {
   return undefined;
 }
 
+// Report which selector actually matches each role on the live page — feedback for the IDE's
+// Page Adapter GUI ("Test on live page").
+function runProbe() {
+  const inputEl = findPromptInput();
+  const submitEl = findSubmitButton();
+
+  const assistantSelectors = effectiveSelectors("assistantSelectors", FALLBACK_ASSISTANT_SELECTORS);
+  let assistant = null;
+  let assistantChars = 0;
+  for (const selector of assistantSelectors) {
+    const nodes = [...document.querySelectorAll(selector)].filter((node) => isVisible(node));
+    const latest = nodes.at(-1)?.textContent?.trim();
+    if (latest) {
+      assistant = selector;
+      assistantChars = latest.length;
+      break;
+    }
+  }
+
+  chrome.runtime.sendMessage({
+    type: "webchat.content.probe",
+    bridgeType: "chat.probe.result",
+    payload: {
+      providerId: provider.id,
+      url: location.href,
+      input: matchedSelector(inputEl, effectiveSelectors("inputSelectors", FALLBACK_INPUT_SELECTORS)),
+      submit: matchedSelector(submitEl, effectiveSelectors("submitSelectors", FALLBACK_SUBMIT_SELECTORS)),
+      assistant,
+      assistantChars
+    }
+  });
+}
+
+function matchedSelector(el, selectors) {
+  if (!el) {
+    return null;
+  }
+  for (const selector of selectors) {
+    try {
+      if (el.matches(selector)) {
+        return selector;
+      }
+    } catch {
+      // invalid user selector — skip
+    }
+  }
+  return selectors[0] || null;
+}
+
 function cancelGeneration() {
   // Stop our own streaming/quiescence timers so no late 'done' is emitted for the cancelled turn.
   clearTimeout(doneTimer);
@@ -552,8 +661,11 @@ function cancelGeneration() {
   hasSentStreamingState = false;
 }
 
-// Best-effort: inject pasted images/files into the provider's composer via a synthetic paste event
-// (ChatGPT/Claude/Gemini image paste handlers read clipboardData.files). Fragile and provider-specific.
+// Inject pasted images/files into the provider's composer. Tried in order of reliability:
+//   1. the page's own (usually hidden) file input — set .files and fire change (the upload path
+//      every provider supports),
+//   2. a synthetic drop event on the composer (drag-and-drop upload),
+//   3. a synthetic paste event (least reliable — clipboardData is read-only in some engines).
 async function injectAttachments(target, attachments) {
   for (const att of attachments) {
     try {
@@ -562,18 +674,60 @@ async function injectAttachments(target, attachments) {
       });
       const dt = new DataTransfer();
       dt.items.add(file);
-      const pasteEvent = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
-      try {
-        Object.defineProperty(pasteEvent, "clipboardData", { value: dt });
-      } catch {
-        /* some engines make clipboardData read-only; the event may still be handled */
+
+      if (injectViaFileInput(dt)) {
+        sendState("submitting", `Attached ${file.name} via the page's file input.`);
+      } else if (injectViaDrop(target, dt)) {
+        sendState("submitting", `Attached ${file.name} via drag-and-drop.`);
+      } else {
+        const pasteEvent = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
+        try {
+          Object.defineProperty(pasteEvent, "clipboardData", { value: dt });
+        } catch {
+          /* some engines make clipboardData read-only; the event may still be handled */
+        }
+        target.focus();
+        target.dispatchEvent(pasteEvent);
       }
-      target.focus();
-      target.dispatchEvent(pasteEvent);
-      await sleep(700); // let the upload preview render before the next attachment / submit
+      // Give the page time to process the upload + render its preview before the next one / submit.
+      await sleep(1400);
     } catch {
-      sendState("submitting", "Couldn't attach a file to the page automatically (try the local vision option).");
+      sendState("submitting", "Couldn't attach a file to the page automatically (enable the local vision option as a fallback).");
     }
+  }
+}
+
+/** Put the files on the page's own upload <input type="file"> and fire change. Most reliable path. */
+function injectViaFileInput(dt) {
+  const inputs = [...document.querySelectorAll("input[type='file']")].filter((input) => {
+    const accept = (input.getAttribute("accept") || "").toLowerCase();
+    return !accept || accept.includes("image") || accept.includes("*");
+  });
+  const input = inputs[0];
+  if (!input) {
+    return false;
+  }
+  try {
+    input.files = dt.files;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Simulate dropping the files onto the composer (providers support drag-and-drop upload). */
+function injectViaDrop(target, dt) {
+  try {
+    const zone = target.closest("form") || target.parentElement || target;
+    const drop = (type) =>
+      zone.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt }));
+    drop("dragenter");
+    drop("dragover");
+    return drop("drop") !== undefined;
+  } catch {
+    return false;
   }
 }
 
@@ -878,10 +1032,7 @@ function sleep(ms) {
 }
 
 function findLatestAssistantText() {
-  const candidates = uniqueSelectors([
-    ...(provider.assistantSelectors || []),
-    ...FALLBACK_ASSISTANT_SELECTORS
-  ]);
+  const candidates = effectiveSelectors("assistantSelectors", FALLBACK_ASSISTANT_SELECTORS);
 
   for (const selector of candidates) {
     const nodes = [...document.querySelectorAll(selector)].filter((node) => isVisible(node));

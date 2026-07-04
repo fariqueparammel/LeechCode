@@ -1070,3 +1070,19 @@ body {
   flex: 1;
   min-width: 0;
 }
+
+/* Page-adapter selector editor (Settings) */
+.selector-textarea {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 11.5px;
+  line-height: 1.5;
+  resize: vertical;
+  white-space: pre;
+  min-height: 40px;
+}
+.selector-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 4px;
+}
