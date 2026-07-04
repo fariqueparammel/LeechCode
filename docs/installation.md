@@ -48,6 +48,9 @@ codium --install-extension ./webchat-*.vsix
 
 Editors without a CLI on your PATH: open the command palette → **Extensions: Install from VSIX…** → pick the `webchat-<version>.vsix` file.
 
+> ℹ️ This installs into your **already-open editor** (its current profile). It does **not** launch a
+> new instance or window — the CLI registers the extension and exits.
+
 Then **reload the window** (command palette → *Developer: Reload Window*). You should see the **LeechCode** icon in the Activity Bar; clicking it opens the chat panel.
 
 > Updating later: rebuild (`pnpm run package`) and install the new VSIX with `--force` / the same palette command, then reload the window again.

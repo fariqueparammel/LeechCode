@@ -67,7 +67,9 @@ code --install-extension ./webchat-*.vsix      # VS Code
 cursor --install-extension ./webchat-*.vsix    # Cursor
 ```
 
-Any fork works via its CLI or **Extensions: Install from VSIX…** in the command palette. Reload the window afterwards — a **LeechCode** icon appears in the Activity Bar.
+Any fork works via its CLI or **Extensions: Install from VSIX…** in the command palette.
+
+This installs into your **existing editor** (current profile) — it does **not** open a new window or a separate instance. If the editor is already open, just reload it (command palette → *Developer: Reload Window*); a **LeechCode** icon then appears in the Activity Bar. Windows opened later have it automatically.
 
 ### 3. Load the browser extension
 
