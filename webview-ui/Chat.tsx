@@ -94,6 +94,7 @@ function StatusStrip({ usage, bridge }: { usage?: SessionUsageInfo; bridge: Brid
 function SessionBar({ sessions }: { sessions: readonly SessionInfo[] }) {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const go = (value: string) => {
     const trimmed = value.trim();
@@ -109,15 +110,49 @@ function SessionBar({ sessions }: { sessions: readonly SessionInfo[] }) {
 
   return (
     <div className="session-bar">
-      <button className="session-toggle" title="Continue a previous chat by URL" onClick={() => setOpen((v) => !v)}>
-        🔗 Continue a chat{sessions.length > 0 ? ` (${sessions.length})` : ""} {open ? "▾" : "▸"}
+      <button className="session-toggle" title="Chat history — resume a previous conversation" onClick={() => setOpen((v) => !v)}>
+        🔗 Chats{sessions.length > 0 ? ` (${sessions.length})` : ""} {open ? "▾" : "▸"}
       </button>
       {open ? (
         <div className="session-panel">
+          <div className="session-actions-row">
+            <button
+              className="btn ghost"
+              title="Start a fresh chat, seeded with the compacted summary of your current work"
+              onClick={() => {
+                post({ type: "sessionAction", action: "rotate" });
+                setOpen(false);
+              }}
+            >
+              ＋ New chat
+            </button>
+            {sessions.length > 0 ? (
+              confirmClear ? (
+                <span className="session-clear-confirm">
+                  Clear all history?
+                  <button
+                    className="link-btn danger"
+                    onClick={() => {
+                      post({ type: "clearSessions" });
+                      setConfirmClear(false);
+                    }}
+                  >
+                    yes, clear
+                  </button>
+                  <button className="link-btn" onClick={() => setConfirmClear(false)}>
+                    cancel
+                  </button>
+                </span>
+              ) : (
+                <button className="link-btn" title="Remove all tracked chats (does not delete them on the provider)" onClick={() => setConfirmClear(true)}>
+                  clear history
+                </button>
+              )
+            ) : null}
+          </div>
           <p className="session-guide">
-            Open a past conversation in your browser, copy its URL from the address bar, and paste it here —
-            LeechCode switches the tab to that chat and continues in it (keeping its history). It also lists chats
-            you've used below.
+            Resume a recent chat below — LeechCode reopens it and re-primes the model with that chat's saved
+            project summary. Or paste any past conversation URL from your browser's address bar.
           </p>
           <div className="session-input-row">
             <input
@@ -139,10 +174,23 @@ function SessionBar({ sessions }: { sessions: readonly SessionInfo[] }) {
           {sessions.length > 0 ? (
             <ul className="session-list">
               {sessions.map((s) => (
-                <li key={s.url}>
+                <li key={s.url} className="session-row">
                   <button className="session-item" title={s.url} onClick={() => go(s.url)}>
-                    <span className="session-item-title">{label(s)}</span>
+                    <span className="session-item-title">
+                      {s.summary ? <span title="Has a saved project summary — re-injected on resume">📝 </span> : null}
+                      {label(s)}
+                    </span>
                     <span className="session-item-provider">{s.providerLabel}</span>
+                  </button>
+                  <button
+                    className="session-remove"
+                    title="Remove from history (does not delete the chat on the provider)"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      post({ type: "removeSession", url: s.url });
+                    }}
+                  >
+                    ×
                   </button>
                 </li>
               ))}

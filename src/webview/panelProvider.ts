@@ -151,6 +151,12 @@ export class WebChatViewProvider implements vscode.WebviewViewProvider {
       case "openChatUrl":
         await this.controller.openChatUrl(message.url);
         return;
+      case "removeSession":
+        this.controller.removeSession(message.url);
+        return;
+      case "clearSessions":
+        this.controller.clearSessions();
+        return;
       case "retryLast":
         await this.controller.retryLast();
         return;

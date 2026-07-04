@@ -2,7 +2,7 @@
   "name": "webchat",
   "displayName": "LeechCode",
   "description": "Leech onto your logged-in web AI chat (ChatGPT, Claude, Gemini, Qwen…) and run a full agentic coding loop in your editor — no API keys, no metered tokens.",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "publisher": "local-dev",
   "private": true,
   "license": "MIT",

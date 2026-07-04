@@ -78,6 +78,8 @@ export interface SessionInfo {
   readonly providerLabel: string;
   readonly title?: string;
   readonly lastUsed: string;
+  /** Compacted project-state summary captured while this chat was active — re-injected on resume. */
+  readonly summary?: string;
 }
 
 /** An image/file attached in the composer, sent to the browser to inject into the provider page. */
@@ -163,5 +165,7 @@ export type WebviewToHost =
   | { readonly type: "setModel"; readonly model: string }
   | { readonly type: "toggleFeature"; readonly featureId: string }
   | { readonly type: "openChatUrl"; readonly url: string }
+  | { readonly type: "removeSession"; readonly url: string }
+  | { readonly type: "clearSessions" }
   | { readonly type: "retryLast" }
   | { readonly type: "updateSetting"; readonly key: keyof WebChatSettings; readonly value: string | number | boolean };

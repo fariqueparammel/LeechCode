@@ -551,6 +551,8 @@ export class WebChatController implements vscode.Disposable {
     const turnId = this.currentTurnId ?? randomUUID();
     this.lastParsed = { turnId, response };
     await this.context.globalState.update("webchat.session.summary", response.summary);
+    // Mirror the summary onto the active tracked chat so resuming it later can re-prime the model.
+    this.updateActiveSessionSummary(response.summary);
 
     this.emitters.assistantParsed.fire({
       turnId,
@@ -959,12 +961,49 @@ export class WebChatController implements vscode.Disposable {
       return; // already the current session — no churn
     }
     const title = typeof record?.title === "string" ? cleanSessionTitle(record.title, provider.label) : undefined;
+    const existing = sessions.find((s) => s.url === url);
     const next: SessionInfo[] = [
-      { url, providerId: provider.id, providerLabel: provider.label, title, lastUsed: new Date().toISOString() },
+      {
+        url,
+        providerId: provider.id,
+        providerLabel: provider.label,
+        title: title ?? existing?.title,
+        lastUsed: new Date().toISOString(),
+        // Keep whatever compacted summary we already had for this chat; else adopt the current one.
+        summary: existing?.summary ?? (this.getStoredSummary() || undefined)
+      },
       ...sessions.filter((s) => s.url !== url)
     ].slice(0, 20);
     void this.context.globalState.update("webchat.sessions", next);
     this.emitters.sessions.fire(next);
+  }
+
+  /** Keep the active (newest) session's summary in sync whenever a fresh summary is stored. */
+  private updateActiveSessionSummary(summary: string): void {
+    if (!summary.trim()) {
+      return;
+    }
+    const sessions = this.getSessions();
+    if (sessions.length === 0) {
+      return;
+    }
+    const next = [{ ...sessions[0], summary }, ...sessions.slice(1)];
+    void this.context.globalState.update("webchat.sessions", next);
+    this.emitters.sessions.fire(next);
+  }
+
+  /** Remove one tracked chat from the history list. */
+  removeSession(url: string): void {
+    const next = this.getSessions().filter((s) => s.url !== url);
+    void this.context.globalState.update("webchat.sessions", next);
+    this.emitters.sessions.fire(next);
+  }
+
+  /** Clear the whole tracked chat history. */
+  clearSessions(): void {
+    void this.context.globalState.update("webchat.sessions", []);
+    this.emitters.sessions.fire([]);
+    this.emitters.notice.fire({ level: "info", message: "Cleared the chat history list." });
   }
 
   /** Navigate the connected browser tab to a previously-used conversation URL and continue in it. */
@@ -996,7 +1035,8 @@ export class WebChatController implements vscode.Disposable {
       await this.updateSetting("defaultProvider", provider.id);
     }
     await this.startBridge(true);
-    if (this.getBridgeStatus().clientCount === 0) {
+    const connected = this.getBridgeStatus().clientCount > 0;
+    if (!connected) {
       await vscode.env.openExternal(vscode.Uri.parse(trimmed));
       this.emitters.notice.fire({
         level: "info",
@@ -1013,7 +1053,22 @@ export class WebChatController implements vscode.Disposable {
       );
       this.emitters.notice.fire({ level: "info", message: `Continuing your ${provider.label} conversation…` });
     }
+    // If this chat is in our history with a compacted summary, re-prime the model so it reloads the
+    // project state before the user's next instruction (the conversation may be old or truncated).
+    const tracked = this.getSessions().find((s) => s.url === trimmed);
     this.recordSessionFromPayload({ url: trimmed });
+    if (connected && tracked?.summary?.trim()) {
+      this.emitters.notice.fire({ level: "info", message: "Re-priming the resumed chat with its saved project summary…" });
+      await this.delay(4000); // give the tab time to load the conversation (bridge queues if not ready)
+      await this.dispatchPrompt(
+        [
+          "We are RESUMING this chat session from the IDE. Reload this compacted project state as your working context, then reply with a one-line confirmation of where we left off and wait for my next instruction:",
+          "",
+          tracked.summary
+        ].join("\n"),
+        "continue"
+      );
+    }
   }
 
   /** Re-send the last user turn (manual retry after a block / no response). */

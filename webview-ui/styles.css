@@ -983,3 +983,43 @@ body {
   font-size: 11px;
   color: var(--wc-muted);
 }
+.session-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.session-clear-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--wc-muted);
+}
+.link-btn.danger {
+  color: var(--vscode-testing-iconFailed, #f85149);
+}
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.session-row .session-item {
+  flex: 1;
+  min-width: 0;
+}
+.session-remove {
+  flex: none;
+  background: none;
+  border: none;
+  color: var(--wc-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 5px;
+}
+.session-remove:hover {
+  color: var(--vscode-testing-iconFailed, #f85149);
+  background: color-mix(in srgb, var(--vscode-testing-iconFailed, #f85149) 12%, transparent);
+}
