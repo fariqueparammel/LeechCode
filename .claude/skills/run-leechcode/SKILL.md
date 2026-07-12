@@ -75,18 +75,19 @@ console.log('parsed tools:', JSON.stringify(r.tools));
 
 ## Screenshot the chat GUI (mock provider page)
 
+Cross-platform — finds Chrome/Brave/Edge/Chromium on macOS/Linux/Windows (install paths → `PATH` →
+`$CHROME_PATH`/`$BROWSER`), auto-starts the mock server if needed, writes a PNG, and stops
+everything it started:
+
 ```bash
-node scripts/run-mock-webchat.mjs &   # serves demo/mock-webchat on :53452
-sleep 1.5
-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-  --headless=new --disable-gpu --no-first-run --no-default-browser-check --disable-extensions \
-  --user-data-dir=/tmp/leech-headless-profile --hide-scrollbars \
-  --window-size=1280,900 --screenshot=/tmp/mock-chat.png http://127.0.0.1:53452/
-pkill -f run-mock-webchat
+node .claude/skills/run-leechcode/screenshot.mjs                 # -> $TMPDIR/leechcode-screenshot.png
+node .claude/skills/run-leechcode/screenshot.mjs "" /tmp/x.png   # custom out path
+node .claude/skills/run-leechcode/screenshot.mjs http://127.0.0.1:53451/health /tmp/y.png
+CHROME_PATH=/full/path/to/chrome node .claude/skills/run-leechcode/screenshot.mjs   # force a browser
 ```
 
-⚠ Run the Chrome line from an **unsandboxed** shell (see Gotchas) and always pass an isolated
-`--user-data-dir` so the user's real profile is never touched.
+⚠ Run from an **unsandboxed** shell (see Gotchas). It always uses an isolated `--user-data-dir`, so
+the user's real profile is never touched.
 
 ## Test
 
@@ -113,6 +114,10 @@ when `browserClients` is non-empty.
 - **Headless Chrome/Brave hang forever when spawned from a sandboxed agent shell** (no error — the
   helper processes can't spawn). Disable the command sandbox for browser launches. Brave also
   wedged with legacy `--headless` here; use **Chrome with `--headless=new`**.
+- **Headless Chrome lingers after writing the screenshot** — waiting for it to exit times out even
+  though the PNG is already on disk. `screenshot.mjs` polls for the output file and then kills the
+  browser instead of awaiting exit; the `task_policy_set … invalid argument` lines it prints are
+  benign macOS warnings.
 - **Port 53451 is owned by the running IDE's bridge** — never bind test servers to it; the driver
   defaults to 53461.
 - The driver imports from `dist/` — run `pnpm run compile` first or it dies on require.
